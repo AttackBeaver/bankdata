@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 from datetime import datetime
 import time
 
-# Настройка страницы
 st.set_page_config(
     page_title="Платформа аналитики Банка",
     page_icon="",
@@ -14,10 +13,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Базовый URL API
+# URL API
 API_BASE = "http://localhost:8000"
 
-# ===== КЭШИРОВАНИЕ ДАННЫХ =====
 @st.cache_data(ttl=60)  # Кэш на 60 секунд
 def check_api_health():
     """Проверка подключения к API"""
@@ -91,7 +89,7 @@ def update_consent(client_id, company, data_types, is_active):
             "is_active": is_active
         }
         response = requests.post(f"{API_BASE}/consent", json=consent_data, timeout=5)
-        # Инвалидируем кэш после изменения данных
+
         st.cache_data.clear()
         return response.status_code == 200
     except Exception as e:
@@ -102,7 +100,7 @@ def revoke_consent(consent_id):
     """Отозвать согласие"""
     try:
         response = requests.delete(f"{API_BASE}/consent/{consent_id}", timeout=5)
-        # Инвалидируем кэш после изменения данных
+
         st.cache_data.clear()
         return response.status_code == 200
     except Exception as e:
@@ -121,13 +119,9 @@ def generate_demo_data():
         st.error(f"Ошибка при генерации демо-данных: {e}")
         return False
 
-# ===== ОСНОВНОЙ ИНТЕРФЕЙС =====
-
-# Заголовок приложения
 st.title("Платформа для аналитики и прогнозирования")
 st.markdown("---")
 
-# Селектор роли в сайдбаре
 st.sidebar.header("Выбор роли")
 role = st.sidebar.selectbox(
     "Кто вы?",
@@ -135,7 +129,6 @@ role = st.sidebar.selectbox(
     index=0
 )
 
-# Информация о статусе API
 st.sidebar.markdown("---")
 st.sidebar.subheader("Статус системы")
 api_healthy = check_api_health()
@@ -143,7 +136,6 @@ api_healthy = check_api_health()
 if api_healthy:
     st.sidebar.success("API подключено")
     
-    # Кнопка для генерации демо-данных
     st.sidebar.markdown("---")
     st.sidebar.subheader("Быстрый старт")
     if st.sidebar.button("Сгенерировать демо-данные", help="Создает тестовые согласия и данные"):
@@ -165,23 +157,18 @@ else:
     """)
     st.stop()
 
-# Добавляем индикатор загрузки для долгих операций
 def with_loading(message="Загрузка..."):
     def decorator(func):
         def wrapper(*args, **kwargs):
             with st.spinner(message):
-                time.sleep(0.5)  # Имитация загрузки для лучшего UX
+                time.sleep(0.5)
                 return func(*args, **kwargs)
         return wrapper
     return decorator
 
-# Остальной код приложения остается без изменений...
-# [Здесь должен быть весь остальной код из предыдущего модуля]
-# Основной контент в зависимости от роли
 if role == "Клиент Банка":
     st.header("Личный кабинет клиента")
     
-    # Выбор клиента (в реальной системе здесь была бы авторизация)
     clients = get_clients()
     if not clients:
         st.error("Не удалось загрузить данные клиентов")
@@ -190,13 +177,11 @@ if role == "Клиент Банка":
     selected_client = st.selectbox("Выберите ваш профиль:", clients)
     
     if selected_client:
-        # Вкладки для клиента
         tab1, tab2, tab3 = st.tabs(["Мои данные", "Управление согласием", "О платформе"])
         
         with tab1:
             st.subheader("Ваши финансовые данные")
             
-            # Загрузка профиля клиента
             client_profile = get_client_profile(selected_client)
             if client_profile:
                 col1, col2, col3 = st.columns(3)
@@ -211,14 +196,11 @@ if role == "Клиент Банка":
                     total_spent = sum(t['amount'] for t in client_profile['transactions'])
                     st.metric("Общие расходы", f"{total_spent:,.0f} ₽")
                 
-                # Визуализация транзакций
                 st.subheader("Визуализация ваших трат")
                 
-                # Данные для графиков
                 df_transactions = pd.DataFrame(client_profile['transactions'])
                 df_transactions['date'] = pd.to_datetime(df_transactions['date'])
                 
-                # Круговая диаграмма по категориям
                 col1, col2 = st.columns(2)
                 
                 with col1:
@@ -228,13 +210,11 @@ if role == "Клиент Банка":
                     st.plotly_chart(fig_pie, use_container_width=True)
                 
                 with col2:
-                    # График трат по времени
                     daily_spending = df_transactions.groupby('date')['amount'].sum().reset_index()
                     fig_line = px.line(daily_spending, x='date', y='amount', 
                                      title="Динамика трат по дням")
                     st.plotly_chart(fig_line, use_container_width=True)
                 
-                # Таблица транзакций
                 st.subheader("История транзакций")
                 display_df = df_transactions[['date', 'category', 'merchant', 'amount']].copy()
                 display_df['amount'] = display_df['amount'].apply(lambda x: f"{x:,.0f} ₽")
@@ -281,7 +261,6 @@ if role == "Клиент Банка":
                 else:
                     st.info("У вас пока нет активных согласий")
                 
-                # Добавление нового согласия
                 st.subheader("Новое согласие")
                 
                 col1, col2 = st.columns(2)
@@ -336,17 +315,15 @@ if role == "Клиент Банка":
             - Получаете более персонализированный сервис в будущем
             """)
             
-            # Мотивационный блок
             st.success("""
             **Присоединяйтесь к движению!** 
             Ваши данные помогают создавать продукты будущего, оставаясь в полной безопасности.
             """)
 
-else:  # B2B-Партнер
+else:  # B2B
     st.header("Панель B2B-Партнера")
     st.info("Доступ к агрегированным и обезличенным данным клиентов")
     
-    # Выбор компании (в реальной системе - авторизация)
     companies = get_companies()
     if not companies:
         st.error("Не удалось загрузить список компаний")
@@ -355,7 +332,6 @@ else:  # B2B-Партнер
     selected_company = st.selectbox("Выберите вашу компанию:", companies)
     
     if selected_company:
-        # Загрузка агрегированных данных
         try:
             response = requests.get(f"{API_BASE}/aggregated-data/{selected_company}")
             if response.status_code == 200:
@@ -365,14 +341,12 @@ else:  # B2B-Партнер
         except:
             company_data = {"data": []}
         
-        # Вкладки для B2B-партнера
         tab1, tab2, tab3 = st.tabs(["Аналитика", "Сегменты", "Настройки"])
         
         with tab1:
             st.subheader("Обзор агрегированных данных")
             
             if company_data["data"]:
-                # Ключевые метрики
                 st.subheader("Ключевые показатели")
                 
                 col1, col2, col3, col4 = st.columns(4)
@@ -390,10 +364,8 @@ else:  # B2B-Партнер
                 with col4:
                     st.metric("Статус", "✅ Активно")
                 
-                # Визуализация данных по типам
                 st.subheader("Визуализация данных")
                 
-                # Группируем данные по типам
                 data_by_type = {}
                 for dataset in company_data["data"]:
                     data_type = dataset["data_type"]
@@ -401,12 +373,10 @@ else:  # B2B-Партнер
                         data_by_type[data_type] = []
                     data_by_type[data_type].append(dataset)
                 
-                # Отображаем визуализации для каждого типа данных
                 for data_type, datasets in data_by_type.items():
                     st.markdown(f"**{data_type.replace('_', ' ').title()}**")
                     
                     if data_type == "category_spending":
-                        # Собираем данные по категориям из всех наборов
                         all_categories = {}
                         for dataset in datasets:
                             categories = dataset["metrics"].get("spending_by_category", {})
@@ -416,7 +386,6 @@ else:  # B2B-Партнер
                                 all_categories[category] += amount
                         
                         if all_categories:
-                            # Столбчатая диаграмма трат по категориям
                             df_categories = pd.DataFrame({
                                 'Category': list(all_categories.keys()),
                                 'Amount': list(all_categories.values())
@@ -429,7 +398,6 @@ else:  # B2B-Партнер
                             st.plotly_chart(fig_bar, use_container_width=True)
                     
                     elif data_type == "average_bill":
-                        # Статистика по чекам
                         avg_bills = [d["metrics"].get("average_transaction_amount", 0) for d in datasets]
                         min_bills = [d["metrics"].get("min_amount", 0) for d in datasets]
                         max_bills = [d["metrics"].get("max_amount", 0) for d in datasets]
@@ -444,7 +412,6 @@ else:  # B2B-Партнер
                                 st.metric("Максимальный чек", f"{max(max_bills):.2f} ₽")
                     
                     elif data_type == "age_group_stats":
-                        # Демографические данные
                         age_groups = {}
                         cities = {}
                         balances = []
@@ -470,7 +437,6 @@ else:  # B2B-Партнер
                             col1, col2 = st.columns(2)
                             
                             with col1:
-                                # Круговая диаграмма возрастных групп
                                 df_ages = pd.DataFrame({
                                     'Age Group': list(age_groups.keys()),
                                     'Count': list(age_groups.values())
@@ -481,7 +447,6 @@ else:  # B2B-Партнер
                             
                             with col2:
                                 if cities:
-                                    # Топ городов
                                     df_cities = pd.DataFrame({
                                         'City': list(cities.keys()),
                                         'Count': list(cities.values())
@@ -497,7 +462,6 @@ else:  # B2B-Партнер
                     
                     st.markdown("---")
                 
-                # Сырые данные для анализа
                 st.subheader("Детализация данных")
                 with st.expander("Просмотреть все наборы данных"):
                     for i, dataset in enumerate(company_data["data"]):
@@ -512,11 +476,7 @@ else:  # B2B-Партнер
                 **Возможные причины:**
                 - Клиенты еще не предоставили согласие на передачу данных
                 - Данные находятся в процессе агрегации
-                - Технические работы на платформе
-                
-                **Рекомендации:**
-                - Обратитесь в поддержку Банка
-                - Проверьте настройки интеграции
+                - Технические работы на платформе                
                 """)
         
         with tab2:
@@ -560,7 +520,6 @@ else:  # B2B-Партнер
                     - **Минимальный баланс:** {min_balance:,} ₽
                     """)
                     
-                    # Здесь была бы реальная фильтрация данных
                     st.info("В реальной системе здесь происходила бы фильтрация данных и формирование новой выборки")
             
             else:
@@ -591,7 +550,6 @@ else:  # B2B-Партнер
                 if st.button("Показать документацию"):
                     st.info("Документация API доступна по ссылке: http://localhost:8000/docs")
                     
-# Добавим общий футер
 st.markdown("---")
 st.caption("""
 Платформа аналитики Банка | 

@@ -7,7 +7,6 @@ import uuid
 
 app = FastAPI(title="Bank Analytics Platform API", version="1.0.0")
 
-# Разрешаем CORS для взаимодействия со Streamlit
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,8 +14,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ===== МОДЕЛИ PYDANTIC =====
 
 class Transaction(BaseModel):
     """Модель транзакции"""
@@ -50,9 +47,6 @@ class AggregatedData(BaseModel):
     sample_size: int
     generated_at: str
 
-# ===== "БАЗА ДАННЫХ" В ПАМЯТИ =====
-
-# Профили клиентов с транзакциями
 client_profiles_db: Dict[str, ClientProfile] = {
     "client_1": ClientProfile(
         client_id="client_1",
@@ -98,13 +92,10 @@ client_profiles_db: Dict[str, ClientProfile] = {
     )
 }
 
-# База согласий клиентов
 consents_db: Dict[str, ConsentRequest] = {}
 
-# База агрегированных данных
 aggregated_data_db: Dict[str, AggregatedData] = {}
 
-# Список компаний-партнеров
 COMPANIES = [
     "Retail Analytics Pro",
     "FinTech Insights", 
@@ -112,7 +103,6 @@ COMPANIES = [
     "Consumer Trends Lab"
 ]
 
-# Доступные типы данных для согласия
 AVAILABLE_DATA_TYPES = [
     "category_spending",
     "average_bill", 
@@ -120,8 +110,6 @@ AVAILABLE_DATA_TYPES = [
     "geography",
     "age_group_stats"
 ]
-
-# ===== БАЗОВЫЕ ЭНДПОИНТЫ =====
 
 @app.get("/health")
 async def health_check():
@@ -143,7 +131,6 @@ async def get_available_data_types():
     """Получить доступные типы данных"""
     return AVAILABLE_DATA_TYPES
 
-# ===== КЛЮЧЕВЫЕ ФУНКЦИОНАЛЬНЫЕ ЭНДПОИНТЫ =====
 
 @app.get("/client/{client_id}")
 async def get_client_profile(client_id: str):
@@ -171,26 +158,20 @@ async def get_client_consents(client_id: str):
 async def manage_consent(consent_request: ConsentRequest):
     """Управление согласием клиента (дать/отозвать/изменить)"""
     
-    # Проверяем существование клиента
     if consent_request.client_id not in client_profiles_db:
         raise HTTPException(status_code=404, detail="Клиент не найден")
     
-    # Проверяем валидность типов данных
     for data_type in consent_request.data_types:
         if data_type not in AVAILABLE_DATA_TYPES:
             raise HTTPException(status_code=400, detail=f"Неверный тип данных: {data_type}")
     
-    # Создаем уникальный ID для согласия
     consent_id = f"{consent_request.client_id}_{consent_request.company}"
     
-    # Добавляем временную метку
     consent_dict = consent_request.dict()
     consent_dict['last_updated'] = datetime.now().isoformat()
     
-    # Сохраняем или обновляем согласие
     consents_db[consent_id] = ConsentRequest(**consent_dict)
     
-    # Автоматически генерируем агрегированные данные при активации согласия
     if consent_request.is_active:
         await generate_aggregated_data(consent_request.client_id, consent_request.company)
     
@@ -206,7 +187,6 @@ async def revoke_consent(consent_id: str):
     if consent_id in consents_db:
         del consents_db[consent_id]
         
-        # Удаляем соответствующие агрегированные данные
         company = consent_id.split('_')[-1]
         data_key = f"{consent_id}_aggregated"
         if data_key in aggregated_data_db:
@@ -222,7 +202,6 @@ async def get_aggregated_data(company: str):
     if company not in COMPANIES:
         raise HTTPException(status_code=400, detail="Компания не найдена")
     
-    # Фильтруем данные по компании
     company_data = []
     for data_id, data in aggregated_data_db.items():
         if data.company == company:
@@ -237,8 +216,6 @@ async def get_aggregated_data(company: str):
         "data": company_data
     }
 
-# ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
-
 async def generate_aggregated_data(client_id: str, company: str):
     """Генерация агрегированных данных на основе профиля клиента"""
     
@@ -248,7 +225,6 @@ async def generate_aggregated_data(client_id: str, company: str):
     client_profile = client_profiles_db[client_id]
     transactions = client_profile.transactions
     
-    # Агрегация по категориям трат
     category_spending = {}
     for transaction in transactions:
         category = transaction.category
@@ -256,17 +232,13 @@ async def generate_aggregated_data(client_id: str, company: str):
             category_spending[category] = 0
         category_spending[category] += transaction.amount
     
-    # Расчет среднего чека
     total_amount = sum(t.amount for t in transactions)
     average_bill = total_amount / len(transactions) if transactions else 0
     
-    # Частота трат (по дням)
     unique_dates = len(set(t.date for t in transactions))
     
-    # Создаем агрегированные данные
     data_key = f"{client_id}_{company}_aggregated"
     
-    # Данные по категориям трат
     aggregated_data_db[f"{data_key}_categories"] = AggregatedData(
         company=company,
         data_type="category_spending",
@@ -275,11 +247,10 @@ async def generate_aggregated_data(client_id: str, company: str):
             "top_category": max(category_spending, key=category_spending.get) if category_spending else "Нет данных",
             "total_categories": len(category_spending)
         },
-        sample_size=1,  # В демо - 1 клиент, в реальности - N клиентов
+        sample_size=1,
         generated_at=datetime.now().isoformat()
     )
     
-    # Данные по среднему чеку
     aggregated_data_db[f"{data_key}_average"] = AggregatedData(
         company=company,
         data_type="average_bill",
@@ -293,7 +264,6 @@ async def generate_aggregated_data(client_id: str, company: str):
         generated_at=datetime.now().isoformat()
     )
     
-    # Демографические данные (обезличенные)
     aggregated_data_db[f"{data_key}_demographics"] = AggregatedData(
         company=company,
         data_type="age_group_stats",
@@ -319,7 +289,6 @@ async def debug_aggregated():
 @app.get("/demo-data")
 async def get_demo_data():
     """Генерация демо-данных для быстрого тестирования"""
-    # Создаем несколько согласий для демонстрации
     demo_consents = [
         {
             "client_id": "client_1",
@@ -349,7 +318,6 @@ async def get_demo_data():
     
     return {"message": "Демо-данные успешно созданы", "consents_created": len(demo_consents)}
 
-# Улучшим функцию агрегации для работы с несколькими клиентами
 async def generate_aggregated_data(client_id: str, company: str):
     """Генерация агрегированных данных на основе профиля клиента"""
     
@@ -359,7 +327,6 @@ async def generate_aggregated_data(client_id: str, company: str):
     client_profile = client_profiles_db[client_id]
     transactions = client_profile.transactions
     
-    # Агрегация по категориям трат
     category_spending = {}
     for transaction in transactions:
         category = transaction.category
@@ -367,14 +334,11 @@ async def generate_aggregated_data(client_id: str, company: str):
             category_spending[category] = 0
         category_spending[category] += transaction.amount
     
-    # Расчет среднего чека
     total_amount = sum(t.amount for t in transactions)
     average_bill = total_amount / len(transactions) if transactions else 0
     
-    # Создаем агрегированные данные
     data_key = f"{client_id}_{company}"
     
-    # Данные по категориям трат
     aggregated_data_db[f"{data_key}_categories"] = AggregatedData(
         company=company,
         data_type="category_spending",
@@ -388,7 +352,6 @@ async def generate_aggregated_data(client_id: str, company: str):
         generated_at=datetime.now().isoformat()
     )
     
-    # Данные по среднему чеку
     aggregated_data_db[f"{data_key}_average"] = AggregatedData(
         company=company,
         data_type="average_bill", 
@@ -403,7 +366,6 @@ async def generate_aggregated_data(client_id: str, company: str):
         generated_at=datetime.now().isoformat()
     )
     
-    # Демографические данные (обезличенные)
     aggregated_data_db[f"{data_key}_demographics"] = AggregatedData(
         company=company,
         data_type="age_group_stats",
